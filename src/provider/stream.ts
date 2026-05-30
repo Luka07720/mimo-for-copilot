@@ -1,0 +1,105 @@
+import vscode from 'vscode';
+import { createUserFacingError } from '../client';
+import { logger } from '../logger';
+import type { MiMoToolCall, MiMoUsage } from '../types';
+import type { PreparedChatRequest } from './request';
+
+const COPILOT_USAGE_DATA_PART_MIME = 'usage';
+
+export interface StreamChatCompletionOptions {
+  prepared: PreparedChatRequest;
+  progress: vscode.Progress<vscode.LanguageModelResponsePart>;
+  token: vscode.CancellationToken;
+  getCharsPerToken: () => number;
+  setCharsPerToken: (charsPerToken: number) => void;
+}
+
+export function streamChatCompletion({
+  prepared,
+  progress,
+  token,
+  getCharsPerToken,
+  setCharsPerToken,
+}: StreamChatCompletionOptions): Promise<void> {
+  const emittedToolCallIds: string[] = [];
+
+  return prepared.client
+    .streamChatCompletion(
+      prepared.request,
+      {
+        onContent: (content: string) => {
+          progress.report(new vscode.LanguageModelTextPart(content));
+        },
+
+        onToolCall: (toolCall: MiMoToolCall) => {
+          emittedToolCallIds.push(toolCall.id);
+
+          try {
+            const args = JSON.parse(toolCall.function.arguments);
+            progress.report(
+              new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.function.name, args),
+            );
+          } catch {
+            progress.report(
+              new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.function.name, {}),
+            );
+          }
+        },
+
+        onError: (error: Error) => {
+          throw createUserFacingError(error);
+        },
+
+        onDone: () => {
+          // Stream complete
+        },
+
+        onUsage: (usage) => {
+          const charsPerToken = updateCharsPerToken(
+            prepared.totalRequestChars,
+            usage,
+            getCharsPerToken(),
+          );
+          setCharsPerToken(charsPerToken);
+          reportCopilotContextUsage(progress, usage);
+        },
+      },
+      token,
+    )
+    .then(undefined, (error) => {
+      throw error;
+    });
+}
+
+function updateCharsPerToken(
+  totalRequestChars: number,
+  usage: MiMoUsage,
+  charsPerToken: number,
+): number {
+  if (totalRequestChars > 0 && usage.prompt_tokens > 0) {
+    const observedRatio = totalRequestChars / usage.prompt_tokens;
+    return charsPerToken * 0.7 + observedRatio * 0.3;
+  }
+  return charsPerToken;
+}
+
+function reportCopilotContextUsage(
+  progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+  usage: MiMoUsage,
+): void {
+  const data = {
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    prompt_tokens_details: {
+      cached_tokens: usage.prompt_cache_hit_tokens ?? 0,
+    },
+  };
+
+  progress.report(
+    new vscode.LanguageModelDataPart(
+      new TextEncoder().encode(JSON.stringify(data)),
+      COPILOT_USAGE_DATA_PART_MIME,
+    ),
+  );
+}

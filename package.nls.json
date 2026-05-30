@@ -1,0 +1,18 @@
+{
+  "mimo-copilot.command.setApiKey": "MiMo: Set API Key",
+  "mimo-copilot.command.getApiKey": "MiMo: Get API Key",
+  "mimo-copilot.command.clearApiKey": "MiMo: Clear API Key",
+  "mimo-copilot.command.openSettings": "MiMo: Open Settings",
+  "mimo-copilot.command.showLogs": "MiMo: Show Logs",
+  "mimo-copilot.walkthrough.title": "Get Started with MiMo",
+  "mimo-copilot.walkthrough.description": "Set up MiMo-v2.5-pro in Copilot Chat",
+  "mimo-copilot.walkthrough.setApiKey.title": "Set your API Key",
+  "mimo-copilot.walkthrough.setApiKey.description": "Run **MiMo: Set API Key** to configure your MiMo API key.",
+  "mimo-copilot.walkthrough.showModels.title": "Select MiMo Model",
+  "mimo-copilot.walkthrough.showModels.description": "Open Copilot Chat, click the model picker, and select **MiMo-v2.5-pro**.",
+  "mimo-copilot.config.title": "MiMo Copilot",
+  "mimo-copilot.config.baseUrl.description": "API endpoint base URL. Change this for self-hosted or proxy deployments.",
+  "mimo-copilot.config.maxTokens.description": "Maximum output tokens. Set to 0 for API default (no limit).",
+  "mimo-copilot.config.modelIdOverrides.description": "Override the API model ID sent to the endpoint. Useful for third-party API proxies with different model names.",
+  "mimo-copilot.config.modelIdOverrides.mimo-v2.5-pro.description": "API model ID for MiMo-v2.5-pro"
+}

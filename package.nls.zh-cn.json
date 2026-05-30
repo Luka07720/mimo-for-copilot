@@ -1,0 +1,18 @@
+{
+  "mimo-copilot.command.setApiKey": "MiMo: 设置 API Key",
+  "mimo-copilot.command.getApiKey": "MiMo: 获取 API Key",
+  "mimo-copilot.command.clearApiKey": "MiMo: 清除 API Key",
+  "mimo-copilot.command.openSettings": "MiMo: 打开设置",
+  "mimo-copilot.command.showLogs": "MiMo: 显示日志",
+  "mimo-copilot.walkthrough.title": "MiMo 快速开始",
+  "mimo-copilot.walkthrough.description": "在 Copilot Chat 中配置 MiMo-v2.5-pro",
+  "mimo-copilot.walkthrough.setApiKey.title": "设置 API Key",
+  "mimo-copilot.walkthrough.setApiKey.description": "运行 **MiMo: 设置 API Key** 来配置你的 MiMo API 密钥。",
+  "mimo-copilot.walkthrough.showModels.title": "选择 MiMo 模型",
+  "mimo-copilot.walkthrough.showModels.description": "打开 Copilot Chat，点击模型选择器，选择 **MiMo-v2.5-pro**。",
+  "mimo-copilot.config.title": "MiMo Copilot",
+  "mimo-copilot.config.baseUrl.description": "API 端点地址。自托管或代理部署时可修改。",
+  "mimo-copilot.config.maxTokens.description": "最大输出 Token 数。设为 0 使用 API 默认值（不限制）。",
+  "mimo-copilot.config.modelIdOverrides.description": "覆盖发送给 API 的模型 ID。适用于模型名称不同的第三方 API 代理。",
+  "mimo-copilot.config.modelIdOverrides.mimo-v2.5-pro.description": "MiMo-v2.5-pro 对应的 API 模型 ID"
+}
