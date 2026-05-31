@@ -48,7 +48,20 @@ export const MODELS: ModelDefinition[] = [
     name: 'MiMo-v2.5-pro',
     family: 'mimo',
     version: 'v2.5',
-    detail: 'Xiaomi MiMo reasoning model',
+    detail: 'Most capable reasoning model',
+    maxInputTokens: 131072,
+    maxOutputTokens: 32768,
+    capabilities: {
+      toolCalling: MIMO_TOOLS_LIMIT,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'mimo-v2.5',
+    name: 'MiMo-v2.5',
+    family: 'mimo',
+    version: 'v2.5',
+    detail: 'Fast, general-purpose model',
     maxInputTokens: 131072,
     maxOutputTokens: 32768,
     capabilities: {

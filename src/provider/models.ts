@@ -39,7 +39,8 @@ export function toChatInfo(m: ModelDefinition, hasApiKey: boolean): ModelPickerC
 }
 
 function resolveDetailKey(m: ModelDefinition): string | undefined {
-  const key = 'model.pro.detail';
+  const suffix = m.id.startsWith('mimo-v2.5-') ? m.id.slice('mimo-v2.5-'.length) : 'base';
+  const key = `model.${suffix}.detail`;
   const translated = t(key);
   return translated !== key ? key : undefined;
 }

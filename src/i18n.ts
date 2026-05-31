@@ -19,7 +19,8 @@ type Translations = Record<string, string>;
 
 const zh: Translations = {
   // Model descriptions
-  'model.pro.detail': '小米 MiMo 推理模型',
+  'model.pro.detail': '深度推理',
+  'model.base.detail': '快速通用',
 
   // API Key
   'auth.apiKeyRequiredDetail': '请先配置 API Key',
@@ -69,7 +70,8 @@ const zh: Translations = {
 
 const en: Translations = {
   // Model descriptions
-  'model.pro.detail': 'Xiaomi MiMo reasoning model',
+  'model.pro.detail': 'Most capable reasoning model',
+  'model.base.detail': 'Fast, general-purpose model',
 
   // API Key
   'auth.apiKeyRequiredDetail': 'Please run MiMo: Set API Key to configure.',
