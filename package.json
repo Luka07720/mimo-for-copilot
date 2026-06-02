@@ -2,7 +2,7 @@
   "name": "mimo-for-copilot",
   "displayName": "MiMo for Copilot Chat",
   "description": "Pick MiMo-v2.5-pro from the Copilot Chat model picker. Tool calling, streaming — zero config, BYOK.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "mimo-copilot",
   "license": "MIT",
   "repository": {
@@ -117,6 +117,24 @@
               "description": "%mimo-copilot.config.modelIdOverrides.mimo-v2.5.description%"
             }
           }
+        },
+        "mimo-copilot.inlineCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%mimo-copilot.config.inlineCompletion.enabled.description%"
+        },
+        "mimo-copilot.inlineCompletion.model": {
+          "type": "string",
+          "default": "mimo-v2.5",
+          "enum": ["mimo-v2.5", "mimo-v2.5-pro"],
+          "description": "%mimo-copilot.config.inlineCompletion.model.description%"
+        },
+        "mimo-copilot.inlineCompletion.maxTokens": {
+          "type": "number",
+          "default": 128,
+          "minimum": 16,
+          "maximum": 512,
+          "description": "%mimo-copilot.config.inlineCompletion.maxTokens.description%"
         }
       }
     }

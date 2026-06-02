@@ -10,7 +10,7 @@ import type {
 import { createHttpError, normalizeRequestError } from './error';
 
 /**
- * Lightweight SSE-streaming MiMo API client.
+ * Lightweight MiMo API client.
  * No external dependencies — uses Node's built-in fetch.
  */
 export class MiMoClient {
@@ -18,6 +18,50 @@ export class MiMoClient {
     private readonly baseUrl: string,
     private readonly apiKey: string,
   ) {}
+
+  /**
+   * Non-streaming chat completion — used for inline completions.
+   */
+  async chatCompletion(
+    request: Omit<MiMoRequest, 'stream'>,
+    cancellationToken?: CancellationToken,
+  ): Promise<string> {
+    const controller = new AbortController();
+    const cancelListener = cancellationToken?.onCancellationRequested(() => {
+      controller.abort();
+    });
+    if (cancellationToken?.isCancellationRequested) {
+      controller.abort();
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: safeStringify({ ...request, stream: false }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw await createHttpError(response, this.baseUrl);
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      return data.choices?.[0]?.message?.content ?? '';
+    } catch (error) {
+      if (isAbortError(error) && cancellationToken?.isCancellationRequested) {
+        return '';
+      }
+      throw normalizeRequestError(error);
+    } finally {
+      cancelListener?.dispose();
+    }
+  }
 
   /**
    * Stream a chat completion from the MiMo API.
