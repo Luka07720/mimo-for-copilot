@@ -168,10 +168,9 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         max_tokens: maxTokens,
         stream: false,
         temperature: 0.1,
-        // Disable reasoning/thinking mode — try multiple parameter names
+        // Minimize reasoning to save tokens for actual code output
         enable_thinking: false,
-        reasoning_effort: 'none',
-        thinking: { type: 'disabled' },
+        reasoning_effort: 'low',
       }),
     });
 
