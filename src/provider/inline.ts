@@ -188,11 +188,24 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
 
     logger.info(`[InlineCompletion] API response: contentLen=${content.length} reasoningLen=${reasoning.length} finishReason=${finishReason}`);
 
-    if (!content && reasoning) {
-      logger.info(`[InlineCompletion] content empty but reasoning present: "${reasoning.slice(0, 200)}"`);
+    if (content) {
+      return content;
     }
 
-    return content;
+    // For reasoning models: if content is empty but reasoning has code-like text, use it
+    if (reasoning) {
+      logger.info(`[InlineCompletion] content empty, reasoning preview: "${reasoning.slice(0, 200)}"`);
+      // Only use reasoning if it looks like code (starts with code-like patterns)
+      const trimmed = reasoning.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('//') || trimmed.startsWith('#') ||
+          trimmed.startsWith('for') || trimmed.startsWith('if') || trimmed.startsWith('while') ||
+          trimmed.startsWith('int') || trimmed.startsWith('void') || trimmed.startsWith('return') ||
+          /^[a-zA-Z_]\w*\s*[=(;]/.test(trimmed.split('\n')[0])) {
+        return trimmed;
+      }
+    }
+
+    return '';
   }
 
   private cleanCompletion(
