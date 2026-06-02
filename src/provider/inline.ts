@@ -10,11 +10,11 @@ import {
 import { logger } from '../logger';
 
 // Context limits
-const FULL_FILE_MAX_CHARS = 8000;
-const SUFFIX_MAX_LINES = 20;
-const SUFFIX_MAX_CHARS = 1000;
-const COMPLETION_MAX_LINES = 15;
-const DEBOUNCE_MS = 800;
+const FULL_FILE_MAX_CHARS = 3000;
+const SUFFIX_MAX_CHARS = 500;
+const COMPLETION_MAX_LINES = 10;
+const DEBOUNCE_MS = 500;
+const REQUEST_TIMEOUT_MS = 10000;
 
 const SYSTEM_PROMPT =
   'You are a code completion tool. Given code with a <<<CURSOR>>> marker, ' +
@@ -88,6 +88,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         this.requestInFlight = true;
 
         try {
+          const startTime = Date.now();
           logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} file=${fileName} beforeLen=${beforeCursor.length} afterLen=${afterCursor.length}`);
 
           const completion = await this.requestCompletion(
@@ -97,6 +98,13 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
             beforeCursor,
             afterCursor,
           );
+
+          const elapsed = Date.now() - startTime;
+          logger.info(`[InlineCompletion] API took ${elapsed}ms`);
+
+          if (elapsed > REQUEST_TIMEOUT_MS) {
+            logger.warn(`[InlineCompletion] response too slow (${elapsed}ms), VS Code likely timed out`);
+          }
 
           if (!completion) {
             logger.info('[InlineCompletion] empty response from API');
@@ -152,7 +160,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       // FIM endpoint not available, fall through to chat
     }
 
-    // Fallback: chat completions endpoint
+    // Fallback: chat completions endpoint with timeout
     const userPrompt =
       `File: ${fileName} (${language})\n\n` +
       `The cursor is marked as <<<CURSOR>>> below. Write ONLY the code to insert there.\n\n` +
@@ -181,6 +189,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         enable_thinking: false,
         reasoning_effort: 'low',
       }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
