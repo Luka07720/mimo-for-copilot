@@ -10,17 +10,15 @@ import {
 import { logger } from '../logger';
 
 // Context limits
-const FULL_FILE_MAX_CHARS = 3000;
-const SUFFIX_MAX_CHARS = 500;
-const COMPLETION_MAX_LINES = 10;
-const DEBOUNCE_MS = 500;
-const REQUEST_TIMEOUT_MS = 10000;
+const FULL_FILE_MAX_CHARS = 2000;
+const SUFFIX_MAX_CHARS = 300;
+const COMPLETION_MAX_LINES = 8;
+const DEBOUNCE_MS = 300;
+const REQUEST_TIMEOUT_MS = 20000;
 
 const SYSTEM_PROMPT =
-  'You are a code completion tool. Given code with a <<<CURSOR>>> marker, ' +
-  'output ONLY the code to insert at the cursor. No explanations. No markdown. ' +
-  'No reasoning. Just raw code that continues seamlessly. Match indentation and style. ' +
-  'Keep it short (1-10 lines).';
+  'Code completion tool. Output ONLY raw code to insert at <<<CURSOR>>>. ' +
+  'No explanation. No markdown. No thinking. Just code. Max 8 lines.';
 
 export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   private readonly authManager: AuthManager;
