@@ -9,16 +9,23 @@ import {
 } from '../config';
 import { logger } from '../logger';
 
-const PREFIX_MAX_LINES = 50;
-const PREFIX_MAX_CHARS = 2000;
-const SUFFIX_MAX_LINES = 10;
-const SUFFIX_MAX_CHARS = 500;
-const DEBOUNCE_MS = 1000;
+// Context limits
+const FULL_FILE_MAX_CHARS = 8000;
+const SUFFIX_MAX_LINES = 20;
+const SUFFIX_MAX_CHARS = 1000;
+const COMPLETION_MAX_LINES = 15;
+const DEBOUNCE_MS = 800;
 
-const SYSTEM_PROMPT =
-  'You are a code completion assistant. Continue the code seamlessly from where the cursor is placed. ' +
-  'Only output the continuation code — no explanations, no markdown fences, no code blocks. ' +
-  'Match the indentation and style of the surrounding code.';
+const SYSTEM_PROMPT = `You are a code completion engine. Your ONLY job is to continue the code at the [CURSOR] position.
+
+Rules:
+- Output ONLY the code that should be inserted at [CURSOR]
+- NO explanations, NO markdown, NO code fences, NO comments about what you're doing
+- Match the existing indentation, coding style, and patterns of the file
+- Continue seamlessly — do NOT repeat any code that comes before or after the cursor
+- If the cursor is at the end of a complete statement, start a new line
+- Keep completions concise: 1-15 lines maximum
+- Look at the full file context to understand variable names, function signatures, and patterns`;
 
 export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   private readonly authManager: AuthManager;
@@ -44,23 +51,26 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionItem[] | undefined> {
-    logger.info(`[InlineCompletion] called: pos=${position.line}:${position.character} enabled=${getInlineCompletionEnabled()}`);
-
     if (!getInlineCompletionEnabled()) {
       return undefined;
     }
 
     const apiKey = await this.authManager.getApiKey();
     if (!apiKey) {
-      logger.info('[InlineCompletion] no API key');
       return undefined;
     }
 
-    const prefix = this.getPrefix(document, position);
-    const suffix = this.getSuffix(document, position);
-    const language = document.languageId;
+    // Get full file context
+    const fullText = document.getText();
+    const cursorOffset = document.offsetAt(position);
 
-    if (prefix.trim().length === 0) {
+    // Build context: file before cursor + [CURSOR] + file after cursor
+    const beforeCursor = fullText.slice(Math.max(0, cursorOffset - FULL_FILE_MAX_CHARS), cursorOffset);
+    const afterCursor = fullText.slice(cursorOffset, cursorOffset + SUFFIX_MAX_CHARS);
+    const language = document.languageId;
+    const fileName = document.fileName.split(/[\\/]/).pop() ?? '';
+
+    if (beforeCursor.trim().length === 0) {
       return undefined;
     }
 
@@ -69,14 +79,12 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       this.debounceTimer = undefined;
     }
 
-    const requestKey = `${document.uri.toString()}:${position.line}:${position.character}:${prefix.slice(-100)}`;
+    const requestKey = `${document.uri.toString()}:${position.line}:${position.character}:${beforeCursor.slice(-100)}`;
     if (requestKey === this.lastRequestKey) {
-      logger.info('[InlineCompletion] cache hit, skipping');
       return undefined;
     }
 
     if (this.requestInFlight) {
-      logger.info('[InlineCompletion] request already in flight, skipping');
       return undefined;
     }
 
@@ -85,12 +93,14 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         this.requestInFlight = true;
 
         try {
-          logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} prefixLen=${prefix.length}`);
+          logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} file=${fileName} beforeLen=${beforeCursor.length} afterLen=${afterCursor.length}`);
+
           const completion = await this.requestCompletion(
             apiKey,
             language,
-            prefix,
-            suffix,
+            fileName,
+            beforeCursor,
+            afterCursor,
           );
 
           if (!completion) {
@@ -103,13 +113,18 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
 
           const cleaned = this.cleanCompletion(completion, position, document);
           if (!cleaned) {
-            logger.info('[InlineCompletion] cleaned result is empty');
+            logger.info(`[InlineCompletion] cleaned result is empty, raw was: "${completion.slice(0, 100)}"`);
             resolve(undefined);
             return;
           }
 
-          logger.info(`[InlineCompletion] returning: "${cleaned.slice(0, 80)}"`);
-          const item = new vscode.InlineCompletionItem(cleaned, new vscode.Range(position, position));
+          logger.info(`[InlineCompletion] returning ${cleaned.split('\n').length} lines: "${cleaned.slice(0, 120)}"`);
+
+          // Insert at cursor position, replacing nothing
+          const item = new vscode.InlineCompletionItem(
+            cleaned,
+            new vscode.Range(position, position),
+          );
           resolve([item]);
         } catch (error) {
           logger.warn('[InlineCompletion] error:', error);
@@ -121,41 +136,23 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     });
   }
 
-  private getPrefix(document: vscode.TextDocument, position: vscode.Position): string {
-    const startLine = Math.max(0, position.line - PREFIX_MAX_LINES);
-    const range = new vscode.Range(startLine, 0, position.line, position.character);
-    let text = document.getText(range);
-    if (text.length > PREFIX_MAX_CHARS) {
-      text = text.slice(-PREFIX_MAX_CHARS);
-    }
-    return text;
-  }
-
-  private getSuffix(document: vscode.TextDocument, position: vscode.Position): string {
-    const endLine = Math.min(document.lineCount - 1, position.line + SUFFIX_MAX_LINES);
-    const range = new vscode.Range(position.line, position.character, endLine, Number.MAX_SAFE_INTEGER);
-    let text = document.getText(range);
-    if (text.length > SUFFIX_MAX_CHARS) {
-      text = text.slice(0, SUFFIX_MAX_CHARS);
-    }
-    return text;
-  }
-
   private async requestCompletion(
     apiKey: string,
     language: string,
-    prefix: string,
-    suffix: string,
+    fileName: string,
+    beforeCursor: string,
+    afterCursor: string,
   ): Promise<string> {
     const baseUrl = getBaseUrl();
     const modelId = getApiModelId(getInlineCompletionModel());
     const maxTokens = getInlineMaxTokens();
 
+    // Build a clear prompt with full file context
     const userPrompt =
-      `Complete the following ${language} code at the cursor position [CURSOR].\n\n` +
-      '```' + language + '\n' +
-      prefix + '[CURSOR]' + suffix + '\n' +
-      '```';
+      `File: ${fileName} (${language})\n\n` +
+      `Code before cursor:\n\`\`\`${language}\n${beforeCursor}\n\`\`\`\n\n` +
+      (afterCursor.trim() ? `Code after cursor:\n\`\`\`${language}\n${afterCursor}\n\`\`\`\n\n` : '') +
+      `Insert the code that should go at [CURSOR]. Output ONLY the continuation code, nothing else.`;
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -194,20 +191,29 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       return content;
     }
 
-    // For reasoning models: if content is empty but reasoning has code-like text, use it
+    // Fallback: use reasoning content if it looks like code
     if (reasoning) {
       logger.info(`[InlineCompletion] content empty, reasoning preview: "${reasoning.slice(0, 200)}"`);
-      // Only use reasoning if it looks like code (starts with code-like patterns)
       const trimmed = reasoning.trim();
-      if (trimmed.startsWith('{') || trimmed.startsWith('//') || trimmed.startsWith('#') ||
-          trimmed.startsWith('for') || trimmed.startsWith('if') || trimmed.startsWith('while') ||
-          trimmed.startsWith('int') || trimmed.startsWith('void') || trimmed.startsWith('return') ||
-          /^[a-zA-Z_]\w*\s*[=(;]/.test(trimmed.split('\n')[0])) {
+      // Check if it looks like code (not analysis text)
+      if (this.looksLikeCode(trimmed)) {
         return trimmed;
       }
     }
 
     return '';
+  }
+
+  private looksLikeCode(text: string): boolean {
+    const firstLine = text.split('\n')[0].trim();
+    // Code-like patterns
+    if (/^[{(\[]/.test(firstLine)) return true;
+    if (/^(\/\/|\/\*|#|\/\/)/.test(firstLine)) return true;
+    if (/^(for|if|while|switch|return|int|void|char|float|double|struct|class|const|static|extern|typedef|#include|#define)\b/.test(firstLine)) return true;
+    if (/^[a-zA-Z_]\w*\s*[=(;]/.test(firstLine)) return true;
+    // If it starts with common code tokens
+    if (/^[\w]+[\s]*[(){}[\];,]/.test(firstLine)) return true;
+    return false;
   }
 
   private cleanCompletion(
@@ -217,21 +223,39 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
   ): string | undefined {
     let text = completion;
 
+    // Remove markdown fences if present
     text = text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
 
-    if (text.startsWith('\n')) {
-      text = text.slice(1);
-    }
+    // Remove leading/trailing whitespace lines
+    text = text.replace(/^\s*\n/, '');
 
+    // Remove duplicate of text already after cursor
     const lineText = document.lineAt(position.line).text;
     const textAfterCursor = lineText.slice(position.character);
-    if (textAfterCursor.length > 0 && text.startsWith(textAfterCursor)) {
-      text = text.slice(textAfterCursor.length);
+    if (textAfterCursor.length > 0) {
+      // Check if completion starts with the text after cursor
+      if (text.startsWith(textAfterCursor)) {
+        text = text.slice(textAfterCursor.length);
+      }
+      // Also check if completion ends with text after cursor
+      if (text.endsWith(textAfterCursor)) {
+        text = text.slice(0, -textAfterCursor.length);
+      }
     }
 
+    // If cursor is at the end of a line and completion doesn't start with newline, add one
+    if (position.character > 0 && !text.startsWith('\n') && textAfterCursor.length === 0) {
+      // Check if the current line has content (not just whitespace)
+      const currentLine = lineText.trimEnd();
+      if (currentLine.length > 0 && !text.startsWith('\n')) {
+        // Keep as-is if it's a continuation on the same line
+      }
+    }
+
+    // Limit lines
     const lines = text.split('\n');
-    if (lines.length > 10) {
-      text = lines.slice(0, 10).join('\n');
+    if (lines.length > COMPLETION_MAX_LINES) {
+      text = lines.slice(0, COMPLETION_MAX_LINES).join('\n');
     }
 
     text = text.trimEnd();
