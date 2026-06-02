@@ -179,10 +179,20 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       throw new Error(`MiMo API ${response.status}: ${text.slice(0, 200)}`);
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    return data.choices?.[0]?.message?.content ?? '';
+    const data = (await response.json()) as Record<string, unknown>;
+    const choice = (data.choices as Array<Record<string, unknown>>)?.[0];
+    const message = choice?.message as Record<string, unknown> | undefined;
+    const content = (message?.content as string) ?? '';
+    const reasoning = (message?.reasoning_content as string) ?? '';
+    const finishReason = choice?.finish_reason;
+
+    logger.info(`[InlineCompletion] API response: contentLen=${content.length} reasoningLen=${reasoning.length} finishReason=${finishReason}`);
+
+    if (!content && reasoning) {
+      logger.info(`[InlineCompletion] content empty but reasoning present: "${reasoning.slice(0, 200)}"`);
+    }
+
+    return content;
   }
 
   private cleanCompletion(
