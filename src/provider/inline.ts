@@ -142,7 +142,17 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     const modelId = getApiModelId(getInlineCompletionModel());
     const maxTokens = getInlineMaxTokens();
 
-    // Build a clear prompt with full file context
+    // Try FIM (completions) endpoint first — no reasoning overhead
+    try {
+      const fimResult = await this.tryFimCompletion(baseUrl, apiKey, modelId, maxTokens, beforeCursor, afterCursor);
+      if (fimResult !== null) {
+        return fimResult;
+      }
+    } catch {
+      // FIM endpoint not available, fall through to chat
+    }
+
+    // Fallback: chat completions endpoint
     const userPrompt =
       `File: ${fileName} (${language})\n\n` +
       `The cursor is marked as <<<CURSOR>>> below. Write ONLY the code to insert there.\n\n` +
@@ -168,7 +178,6 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         max_tokens: maxTokens,
         stream: false,
         temperature: 0.1,
-        // Minimize reasoning to save tokens for actual code output
         enable_thinking: false,
         reasoning_effort: 'low',
       }),
@@ -186,7 +195,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     const reasoning = (message?.reasoning_content as string) ?? '';
     const finishReason = choice?.finish_reason;
 
-    logger.info(`[InlineCompletion] API response: contentLen=${content.length} reasoningLen=${reasoning.length} finishReason=${finishReason}`);
+    logger.info(`[InlineCompletion] chat API response: contentLen=${content.length} reasoningLen=${reasoning.length} finishReason=${finishReason}`);
 
     if (content) {
       return content;
@@ -196,13 +205,49 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     if (reasoning) {
       logger.info(`[InlineCompletion] content empty, reasoning preview: "${reasoning.slice(0, 200)}"`);
       const trimmed = reasoning.trim();
-      // Check if it looks like code (not analysis text)
       if (this.looksLikeCode(trimmed)) {
         return trimmed;
       }
     }
 
     return '';
+  }
+
+  private async tryFimCompletion(
+    baseUrl: string,
+    apiKey: string,
+    modelId: string,
+    maxTokens: number,
+    prefix: string,
+    suffix: string,
+  ): Promise<string | null> {
+    // Standard FIM format: /v1/completions with prefix/suffix
+    const response = await fetch(`${baseUrl}/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        prefix,
+        suffix,
+        max_tokens: maxTokens,
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      logger.info(`[InlineCompletion] FIM endpoint not available (${response.status}), using chat`);
+      return null;
+    }
+
+    const data = (await response.json()) as Record<string, unknown>;
+    const text = (data.text as string) ??
+      ((data.choices as Array<Record<string, unknown>>)?.[0]?.text as string) ?? '';
+
+    logger.info(`[InlineCompletion] FIM response: textLen=${text.length}`);
+    return text;
   }
 
   private looksLikeCode(text: string): boolean {

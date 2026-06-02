@@ -131,9 +131,9 @@
         },
         "mimo-copilot.inlineCompletion.maxTokens": {
           "type": "number",
-          "default": 4096,
+          "default": 16384,
           "minimum": 16,
-          "maximum": 16384,
+          "maximum": 32768,
           "description": "%mimo-copilot.config.inlineCompletion.maxTokens.description%"
         }
       }
