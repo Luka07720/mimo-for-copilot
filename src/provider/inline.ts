@@ -16,16 +16,11 @@ const SUFFIX_MAX_CHARS = 1000;
 const COMPLETION_MAX_LINES = 15;
 const DEBOUNCE_MS = 800;
 
-const SYSTEM_PROMPT = `You are a code completion engine. Your ONLY job is to continue the code at the [CURSOR] position.
-
-Rules:
-- Output ONLY the code that should be inserted at [CURSOR]
-- NO explanations, NO markdown, NO code fences, NO comments about what you're doing
-- Match the existing indentation, coding style, and patterns of the file
-- Continue seamlessly — do NOT repeat any code that comes before or after the cursor
-- If the cursor is at the end of a complete statement, start a new line
-- Keep completions concise: 1-15 lines maximum
-- Look at the full file context to understand variable names, function signatures, and patterns`;
+const SYSTEM_PROMPT =
+  'You are a code completion tool. Given code with a <<<CURSOR>>> marker, ' +
+  'output ONLY the code to insert at the cursor. No explanations. No markdown. ' +
+  'No reasoning. Just raw code that continues seamlessly. Match indentation and style. ' +
+  'Keep it short (1-10 lines).';
 
 export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   private readonly authManager: AuthManager;
@@ -150,9 +145,13 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     // Build a clear prompt with full file context
     const userPrompt =
       `File: ${fileName} (${language})\n\n` +
-      `Code before cursor:\n\`\`\`${language}\n${beforeCursor}\n\`\`\`\n\n` +
-      (afterCursor.trim() ? `Code after cursor:\n\`\`\`${language}\n${afterCursor}\n\`\`\`\n\n` : '') +
-      `Insert the code that should go at [CURSOR]. Output ONLY the continuation code, nothing else.`;
+      `The cursor is marked as <<<CURSOR>>> below. Write ONLY the code to insert there.\n\n` +
+      '```' + language + '\n' +
+      beforeCursor +
+      '<<<CURSOR>>>' +
+      afterCursor +
+      '\n```\n\n' +
+      'Output ONLY the continuation code. No explanation. No markdown fences.';
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -168,8 +167,11 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         ],
         max_tokens: maxTokens,
         stream: false,
+        temperature: 0.1,
+        // Disable reasoning/thinking mode — try multiple parameter names
         enable_thinking: false,
-        temperature: 0.2,
+        reasoning_effort: 'none',
+        thinking: { type: 'disabled' },
       }),
     });
 
