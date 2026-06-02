@@ -13,7 +13,7 @@ const PREFIX_MAX_LINES = 50;
 const PREFIX_MAX_CHARS = 2000;
 const SUFFIX_MAX_LINES = 10;
 const SUFFIX_MAX_CHARS = 500;
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 1000;
 
 const SYSTEM_PROMPT =
   'You are a code completion assistant. Continue the code seamlessly from where the cursor is placed. ' +
@@ -24,7 +24,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
   private readonly authManager: AuthManager;
   private lastRequestKey = '';
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  private requestId = 0;
+  private requestInFlight = false;
 
   constructor(context: vscode.ExtensionContext) {
     this.authManager = new AuthManager(context);
@@ -75,10 +75,15 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       return undefined;
     }
 
-    const id = ++this.requestId;
+    if (this.requestInFlight) {
+      logger.info('[InlineCompletion] request already in flight, skipping');
+      return undefined;
+    }
 
     return new Promise((resolve) => {
       this.debounceTimer = setTimeout(async () => {
+        this.requestInFlight = true;
+
         try {
           logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} prefixLen=${prefix.length}`);
           const completion = await this.requestCompletion(
@@ -88,14 +93,8 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
             suffix,
           );
 
-          if (id !== this.requestId) {
-            logger.info('[InlineCompletion] outdated result, discarding');
-            resolve(undefined);
-            return;
-          }
-
           if (!completion) {
-            logger.info('[InlineCompletion] empty response');
+            logger.info('[InlineCompletion] empty response from API');
             resolve(undefined);
             return;
           }
@@ -115,6 +114,8 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         } catch (error) {
           logger.warn('[InlineCompletion] error:', error);
           resolve(undefined);
+        } finally {
+          this.requestInFlight = false;
         }
       }, DEBOUNCE_MS);
     });
