@@ -126,6 +126,8 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
             cleaned,
             new vscode.Range(position, position),
           );
+          // Explicitly set insertText to ensure VS Code displays it
+          item.insertText = cleaned;
           resolve([item]);
         } catch (error) {
           logger.warn('[InlineCompletion] error:', error);
