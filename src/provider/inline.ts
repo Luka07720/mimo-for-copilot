@@ -1,6 +1,5 @@
 import vscode from 'vscode';
 import { AuthManager } from '../auth';
-import { MiMoClient } from '../client';
 import {
   getApiModelId,
   getBaseUrl,
@@ -25,7 +24,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
   private readonly authManager: AuthManager;
   private lastRequestKey = '';
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  private activeAbort: AbortController | undefined;
+  private requestId = 0;
 
   constructor(context: vscode.ExtensionContext) {
     this.authManager = new AuthManager(context);
@@ -65,29 +64,21 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       return undefined;
     }
 
-    // Cancel any previous in-flight request
-    if (this.activeAbort) {
-      this.activeAbort.abort();
-      this.activeAbort = undefined;
-    }
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = undefined;
     }
 
-    // Cache key: same position + same prefix = skip
     const requestKey = `${document.uri.toString()}:${position.line}:${position.character}:${prefix.slice(-100)}`;
     if (requestKey === this.lastRequestKey) {
       logger.info('[InlineCompletion] cache hit, skipping');
       return undefined;
     }
 
+    const id = ++this.requestId;
+
     return new Promise((resolve) => {
       this.debounceTimer = setTimeout(async () => {
-        // Use our own AbortController, not VS Code's token
-        const abort = new AbortController();
-        this.activeAbort = abort;
-
         try {
           logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} prefixLen=${prefix.length}`);
           const completion = await this.requestCompletion(
@@ -95,11 +86,10 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
             language,
             prefix,
             suffix,
-            abort.signal,
           );
 
-          if (abort.signal.aborted) {
-            logger.info('[InlineCompletion] aborted after response');
+          if (id !== this.requestId) {
+            logger.info('[InlineCompletion] outdated result, discarding');
             resolve(undefined);
             return;
           }
@@ -123,17 +113,8 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
           const item = new vscode.InlineCompletionItem(cleaned, new vscode.Range(position, position));
           resolve([item]);
         } catch (error) {
-          if (abort.signal.aborted) {
-            logger.info('[InlineCompletion] request aborted');
-            resolve(undefined);
-            return;
-          }
           logger.warn('[InlineCompletion] error:', error);
           resolve(undefined);
-        } finally {
-          if (this.activeAbort === abort) {
-            this.activeAbort = undefined;
-          }
         }
       }, DEBOUNCE_MS);
     });
@@ -164,13 +145,10 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     language: string,
     prefix: string,
     suffix: string,
-    signal: AbortSignal,
   ): Promise<string> {
     const baseUrl = getBaseUrl();
     const modelId = getApiModelId(getInlineCompletionModel());
     const maxTokens = getInlineMaxTokens();
-
-    const client = new MiMoClient(baseUrl, apiKey);
 
     const userPrompt =
       `Complete the following ${language} code at the cursor position [CURSOR].\n\n` +
@@ -178,7 +156,6 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
       prefix + '[CURSOR]' + suffix + '\n' +
       '```';
 
-    // Use fetch directly for cancellation control
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -194,7 +171,6 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         max_tokens: maxTokens,
         stream: false,
       }),
-      signal,
     });
 
     if (!response.ok) {
@@ -215,22 +191,18 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
   ): string | undefined {
     let text = completion;
 
-    // Remove leading/trailing markdown fences if present
     text = text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
 
-    // Remove leading newline
     if (text.startsWith('\n')) {
       text = text.slice(1);
     }
 
-    // Deduplicate if completion starts with text already after cursor
     const lineText = document.lineAt(position.line).text;
     const textAfterCursor = lineText.slice(position.character);
     if (textAfterCursor.length > 0 && text.startsWith(textAfterCursor)) {
       text = text.slice(textAfterCursor.length);
     }
 
-    // Limit to reasonable length
     const lines = text.split('\n');
     if (lines.length > 10) {
       text = lines.slice(0, 10).join('\n');
