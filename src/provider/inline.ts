@@ -171,6 +171,8 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         ],
         max_tokens: maxTokens,
         stream: false,
+        enable_thinking: false,
+        temperature: 0.2,
       }),
     });
 
