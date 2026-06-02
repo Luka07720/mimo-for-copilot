@@ -44,10 +44,10 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
     context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionItem[] | undefined> {
-    logger.debug(`[InlineCompletion] called: file=${document.fileName} pos=${position.line}:${position.character} enabled=${getInlineCompletionEnabled()}`);
+    logger.info(`[InlineCompletion] called: file=${document.fileName} pos=${position.line}:${position.character} enabled=${getInlineCompletionEnabled()}`);
 
     if (!getInlineCompletionEnabled()) {
-      logger.debug('[InlineCompletion] disabled, skipping');
+      logger.info('[InlineCompletion] disabled, skipping');
       return undefined;
     }
 
@@ -56,7 +56,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
 
     const apiKey = await this.authManager.getApiKey();
     if (!apiKey) {
-      logger.debug('[InlineCompletion] no API key, skipping');
+      logger.info('[InlineCompletion] no API key, skipping');
       return undefined;
     }
 
@@ -88,7 +88,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
         }
 
         try {
-          logger.debug(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} prefixLen=${prefix.length}`);
+          logger.info(`[InlineCompletion] requesting: model=${getInlineCompletionModel()} lang=${language} prefixLen=${prefix.length}`);
           const completion = await this.requestCompletion(
             apiKey,
             language,
@@ -98,7 +98,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
           );
 
           if (token.isCancellationRequested || !completion) {
-            logger.debug(`[InlineCompletion] no result: cancelled=${token.isCancellationRequested} empty=${!completion}`);
+            logger.info(`[InlineCompletion] no result: cancelled=${token.isCancellationRequested} empty=${!completion}`);
             resolve(undefined);
             return;
           }
@@ -108,12 +108,12 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
           // Clean up the completion
           const cleaned = this.cleanCompletion(completion, position, document);
           if (!cleaned) {
-            logger.debug('[InlineCompletion] cleaned result is empty');
+            logger.info('[InlineCompletion] cleaned result is empty');
             resolve(undefined);
             return;
           }
 
-          logger.debug(`[InlineCompletion] returning suggestion: "${cleaned.slice(0, 50)}..."`);
+          logger.info(`[InlineCompletion] returning suggestion: "${cleaned.slice(0, 50)}..."`);
           const item = new vscode.InlineCompletionItem(cleaned, new vscode.Range(position, position));
           resolve([item]);
         } catch (error) {

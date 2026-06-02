@@ -16,6 +16,8 @@ export async function registerProvider(
     vscode.languages.registerInlineCompletionItemProvider('*', inlineProvider),
   );
 
+  logger.info('MiMo inline completion provider registered');
+
   // Copilot Chat can serve cached model info. Activate it first so
   // this refresh reaches a live listener and re-queries the provider.
   await activateCopilotChat();
