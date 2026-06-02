@@ -14,7 +14,7 @@ const FULL_FILE_MAX_CHARS = 500;
 const SUFFIX_MAX_CHARS = 100;
 const COMPLETION_MAX_LINES = 5;
 const DEBOUNCE_MS = 200;
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 15000;
 
 const SYSTEM_PROMPT =
   'Code completion tool. Output ONLY raw code to insert at <<<CURSOR>>>. ' +
@@ -183,7 +183,7 @@ export class MiMoInlineCompletionProvider implements vscode.InlineCompletionItem
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: Math.min(maxTokens, 256),
+        max_tokens: maxTokens,
         stream: false,
         temperature: 0.1,
         enable_thinking: false,
