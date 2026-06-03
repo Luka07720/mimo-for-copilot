@@ -33,27 +33,3 @@ export function getMaxTokens(): number | undefined {
   const value = config.get<number>('maxTokens', 0);
   return value > 0 ? value : undefined;
 }
-
-/**
- * Whether inline completion is enabled.
- */
-export function getInlineCompletionEnabled(): boolean {
-  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  return config.get<boolean>('inlineCompletion.enabled', true);
-}
-
-/**
- * Model ID to use for inline completions.
- */
-export function getInlineCompletionModel(): string {
-  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  return config.get<string>('inlineCompletion.model', 'mimo-v2.5');
-}
-
-/**
- * Max tokens for inline completion responses.
- */
-export function getInlineMaxTokens(): number {
-  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  return config.get<number>('inlineCompletion.maxTokens', 128);
-}

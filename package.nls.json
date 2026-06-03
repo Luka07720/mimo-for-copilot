@@ -15,8 +15,5 @@
   "mimo-copilot.config.maxTokens.description": "Maximum output tokens. Set to 0 for API default (no limit).",
   "mimo-copilot.config.modelIdOverrides.description": "Override the API model ID sent to the endpoint. Useful for third-party API proxies with different model names.",
   "mimo-copilot.config.modelIdOverrides.mimo-v2.5-pro.description": "API model ID for MiMo-v2.5-pro",
-  "mimo-copilot.config.modelIdOverrides.mimo-v2.5.description": "API model ID for MiMo-v2.5",
-  "mimo-copilot.config.inlineCompletion.enabled.description": "Enable MiMo-powered inline code completions (gray ghost text suggestions).",
-  "mimo-copilot.config.inlineCompletion.model.description": "Model to use for inline completions. MiMo-v2.5 is faster; MiMo-v2.5-pro is more capable.",
-  "mimo-copilot.config.inlineCompletion.maxTokens.description": "Maximum tokens for inline completion responses. Lower values = faster suggestions."
+  "mimo-copilot.config.modelIdOverrides.mimo-v2.5.description": "API model ID for MiMo-v2.5"
 }
